@@ -1226,8 +1226,16 @@ public:
 	}
 };
 
+inline void Patch_exportHeader( const Patch& patch, TokenWriter& writer ){
+	writer.writeToken( "{" );
+	writer.nextLine();
+	writer.writeToken( patch.m_patchDef3 ? "patchDef3" : "patchDef2" );
+	writer.nextLine();
+	writer.writeToken( "{" );
+	writer.nextLine();
+}
 
-inline void Patch_exportHeader(const Patch &patch, TokenWriter &writer)
+inline void PatchWS_exportHeader(const Patch &patch, TokenWriter &writer)
 {
 	writer.writeToken("{");
 	writer.nextLine();
@@ -1364,7 +1372,7 @@ class PatchWSTokenExporter : public MapExporter
 public:
 	PatchWSTokenExporter( Patch& patch ) : m_patch( patch ){}
 	void exportTokens( TokenWriter& writer ) const{
-		Patch_exportHeader( m_patch, writer );
+		PatchWS_exportHeader( m_patch, writer );
 		PatchDoom3_exportShader( m_patch, writer );
 		Patch_exportParams( m_patch, writer );
 		Patch_exportMatrix( m_patch, writer );
