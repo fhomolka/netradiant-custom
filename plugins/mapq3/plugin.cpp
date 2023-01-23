@@ -649,6 +649,94 @@ typedef SingletonModule<MapVMFAPI, MapDependencies> MapVMFModule;
 MapVMFModule g_MapVMFModule;
 
 
+class MapWSAPI final : public TypeSystemRef, public MapFormat, public PrimitiveParser
+{
+	mutable bool m_formatDetected;
+public:
+	typedef MapFormat Type;
+	STRING_CONSTANT( Name, "mapws" );
+
+	MapWSAPI(){
+		GlobalFiletypesModule::getTable().addType( Type::Name, Name, filetype_t( "ws maps", "*.map", true, true, true ) );
+		GlobalFiletypesModule::getTable().addType( Type::Name, Name, filetype_t( "ws region", "*.reg", true, true, true ) );
+		GlobalFiletypesModule::getTable().addType( Type::Name, Name, filetype_t( "ws compiled maps", "*.bsp", false, true, false ) );
+	}
+
+	MapFormat* getTable(){
+		return this;
+	}
+
+	scene::Node& parsePrimitive( Tokeniser& tokeniser ) const {
+		const char* primitive = tokeniser.getToken();
+		if ( primitive != 0 ) {
+			if ( string_equal( primitive, "patchDef2" ) || string_equal( primitive, "patchDef2WS" ) ) {
+				return GlobalPatchModule::getTable().createPatch();
+			}
+			if ( string_equal( primitive, "patchDef3" ) || string_equal( primitive, "patchDef3WS" ) ) {
+				return GlobalPatchModule::getTable().createPatch();
+			}
+			if ( string_equal( primitive, "patchDefWS" ) ) {
+				return GlobalPatchModule::getTable().createPatch();
+			}
+
+			if( !m_formatDetected ){
+				EBrushType detectedFormat;
+				if ( string_equal( primitive, "brushDef" ) ) {
+					detectedFormat = eBrushTypeQuake3BP;
+					globalWarningStream() << "detectedFormat = eBrushTypeQuake3BP\n";
+				}
+				else if ( string_equal( primitive, "(" ) && tokeniser.bufferContains( " [ " ) && tokeniser.bufferContains( " ] " ) ) {
+					detectedFormat = eBrushTypeQuake3Valve220;
+					globalWarningStream() << "detectedFormat = eBrushTypeQuake3Valve220\n";
+				}
+				else if ( string_equal( primitive, "(" ) ) {
+					detectedFormat = eBrushTypeQuake3;
+					globalWarningStream() << "detectedFormat = eBrushTypeQuake3\n";
+				}
+				else{
+					globalErrorStream() << "Format is not detected\n";
+					Tokeniser_unexpectedError( tokeniser, primitive, "#different-brush-format" );
+					return g_nullNode;
+				}
+				m_formatDetected = true;
+				if( detectedFormat != GlobalBrushCreator().getFormat() ){
+					GlobalBrushCreator().toggleFormat( detectedFormat );
+				}
+			}
+
+			switch ( GlobalBrushCreator().getFormat() )
+			{
+			case eBrushTypeQuake3:
+			case eBrushTypeQuake3Valve220:
+				tokeniser.ungetToken(); // (
+			// fall through
+			case eBrushTypeQuake3BP:
+				return GlobalBrushCreator().createBrush();
+			default:
+				break;
+			}
+		}
+
+		Tokeniser_unexpectedError( tokeniser, primitive, "#quake3-primitive" );
+		return g_nullNode;
+	}
+
+	void readGraph( scene::Node& root, TextInputStream& inputStream, EntityCreator& entityTable ) const {
+		Tokeniser& tokeniser = GlobalScripLibModule::getTable().m_pfnNewSimpleTokeniser( inputStream );
+		m_formatDetected = false;
+		Map_Read( root, tokeniser, entityTable, *this );
+		tokeniser.release();
+	}
+	void writeGraph( scene::Node& root, GraphTraversalFunc traverse, TextOutputStream& outputStream ) const {
+		TokenWriter& writer = GlobalScripLibModule::getTable().m_pfnNewSimpleTokenWriter( outputStream );
+		Map_Write( root, traverse, writer, false );
+		writer.release();
+	}
+};
+
+typedef SingletonModule<MapWSAPI, MapDependencies> MapWSModule;
+
+MapWSModule g_MapWSModule;
 
 extern "C" void RADIANT_DLLEXPORT Radiant_RegisterModules( ModuleServer& server ){
 	initialiseModule( server );
@@ -660,4 +748,5 @@ extern "C" void RADIANT_DLLEXPORT Radiant_RegisterModules( ModuleServer& server 
 	g_MapQ2Module.selfRegister();
 	g_MapHalfLifeModule.selfRegister();
 	g_MapVMFModule.selfRegister();
+	g_MapWSModule.selfRegister();
 }
