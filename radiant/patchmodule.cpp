@@ -136,6 +136,20 @@ PatchCreator& GetDoom3PatchDef2Creator(){
 	return g_Doom3PatchDef2Creator;
 }
 
+class WSPatchCreator : public CommonPatchCreator
+{
+public:
+	scene::Node& createPatch(){
+		return ( new PatchNodeWS() )->node();
+	}
+};
+
+WSPatchCreator g_WSPatchCreator;
+
+PatchCreator& GetWSPatchCreator(){
+	return g_WSPatchCreator;
+}
+
 #include "modulesystem/singletonmodule.h"
 #include "modulesystem/moduleregistry.h"
 
@@ -226,3 +240,31 @@ public:
 typedef SingletonModule<PatchDef2Doom3API, PatchDependencies> PatchDef2Doom3Module;
 typedef Static<PatchDef2Doom3Module> StaticPatchDef2Doom3Module;
 StaticRegisterModule staticRegisterPatchDef2Doom3( StaticPatchDef2Doom3Module::instance() );
+
+class PatchWSAPI : public TypeSystemRef
+{
+	PatchCreator* m_patchWS;
+public:
+	typedef PatchCreator Type;
+	STRING_CONSTANT(Name, "ws");
+
+	PatchWSAPI()
+	{
+		Patch_Construct( ePatchTypeWS );
+
+		m_patchWS = &GetWSPatchCreator();
+		g_patchCreator = m_patchWS;
+	}
+
+	~PatchWSAPI(){
+		Patch_Destroy();
+	}
+
+	PatchCreator* getTable(){
+		return m_patchWS;
+	}
+};
+
+typedef SingletonModule<PatchWSAPI, PatchDependencies> PatchDefWSModule;
+typedef Static<PatchDefWSModule> StaticPatchDefWSModule;
+StaticRegisterModule staticRegisterPatchDefWS( StaticPatchDefWSModule::instance() );

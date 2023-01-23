@@ -69,6 +69,7 @@ enum EPatchType
 {
 	ePatchTypeQuake3,
 	ePatchTypeDoom3,
+	ePatchTypeWS,
 };
 
 extern int g_PatchSubdivideThreshold;
@@ -387,6 +388,7 @@ class Patch :
 		CopiedString m_shader;
 		PatchControlArray m_ctrl;
 		bool m_patchDef3;
+		bool m_patchDefWS;
 		std::size_t m_subdivisions_x;
 		std::size_t m_subdivisions_y;
 	};
@@ -405,7 +407,6 @@ private:
 	scene::Node* m_node;
 
 	AABB m_aabb_local;   // local bbox
-
 	CopiedString m_shader;
 	Shader* m_state;
 
@@ -413,6 +414,7 @@ private:
 	std::size_t m_height;
 public:
 	bool m_patchDef3;
+	bool m_patchDefWS;
 	std::size_t m_subdivisions_x;
 	std::size_t m_subdivisions_y;
 private:
@@ -447,6 +449,7 @@ private:
 		m_width = m_height = 0;
 
 		m_patchDef3 = false;
+		m_patchDefWS = false;
 		m_subdivisions_x = 0;
 		m_subdivisions_y = 0;
 
@@ -496,6 +499,7 @@ public:
 		construct();
 
 		m_patchDef3 = other.m_patchDef3;
+		m_patchDefWS = other.m_patchDefWS;
 		m_subdivisions_x = other.m_subdivisions_x;
 		m_subdivisions_y = other.m_subdivisions_y;
 		setDims( other.m_width, other.m_height );
@@ -528,6 +532,7 @@ public:
 		m_bOverlay = false;
 
 		m_patchDef3 = other.m_patchDef3;
+		m_patchDefWS = other.m_patchDefWS;
 		m_subdivisions_x = other.m_subdivisions_x;
 		m_subdivisions_y = other.m_subdivisions_y;
 		setDims( other.m_width, other.m_height );
@@ -953,6 +958,7 @@ public:
 			m_ctrl = other.m_ctrl;
 			onAllocate( m_ctrl.size() );
 			m_patchDef3 = other.m_patchDef3;
+			m_patchDefWS = other.m_patchDefWS;
 			m_subdivisions_x = other.m_subdivisions_x;
 			m_subdivisions_y = other.m_subdivisions_y;
 		}
@@ -1109,6 +1115,54 @@ inline bool Patch_importMatrix( Patch& patch, Tokeniser& tokeniser ){
 	return true;
 }
 
+inline bool PatchWS_importMatrix( Patch& patch, Tokeniser& tokeniser ){
+	// parse matrix
+	tokeniser.nextLine();
+	RETURN_FALSE_IF_FAIL(Tokeniser_parseToken(tokeniser, "("));
+	{
+		for (std::size_t c = 0; c < patch.getWidth(); c++) {
+			tokeniser.nextLine();
+			RETURN_FALSE_IF_FAIL(Tokeniser_parseToken(tokeniser, "("));
+			for (std::size_t r = 0; r < patch.getHeight(); r++) {
+				RETURN_FALSE_IF_FAIL(Tokeniser_parseToken(tokeniser, "("));
+				RETURN_FALSE_IF_FAIL(Tokeniser_getFloat(tokeniser, patch.ctrlAt(r, c).m_vertex[0]));
+				RETURN_FALSE_IF_FAIL(Tokeniser_getFloat(tokeniser, patch.ctrlAt(r, c).m_vertex[1]));
+				RETURN_FALSE_IF_FAIL(Tokeniser_getFloat(tokeniser, patch.ctrlAt(r, c).m_vertex[2]));
+				RETURN_FALSE_IF_FAIL(Tokeniser_getFloat(tokeniser, patch.ctrlAt(r, c).m_texcoord[0]));
+				RETURN_FALSE_IF_FAIL(Tokeniser_getFloat(tokeniser, patch.ctrlAt(r, c).m_texcoord[1]));
+
+				patch.ctrlAt(r, c).m_color = Vector4(1,1,1,1); //assume opaque white.
+
+				if (patch.m_patchDefWS) {
+					//Temp Hack, to handle weird format...
+					if (Tokeniser_nextTokenMatches(tokeniser, ")"))
+						RETURN_FALSE_IF_FAIL(Tokeniser_parseToken(tokeniser, "("));
+					//End Temp Hack.
+				}
+
+				if (Tokeniser_nextTokenMatches(tokeniser, ")"))
+					continue;
+				RETURN_FALSE_IF_FAIL(Tokeniser_getFloat(tokeniser, patch.ctrlAt(r, c).m_color[0]));
+				if (Tokeniser_nextTokenMatches(tokeniser, ")"))
+					continue;
+				RETURN_FALSE_IF_FAIL(Tokeniser_getFloat(tokeniser, patch.ctrlAt(r, c).m_color[1]));
+				if (Tokeniser_nextTokenMatches(tokeniser, ")"))
+					continue;
+				RETURN_FALSE_IF_FAIL(Tokeniser_getFloat(tokeniser, patch.ctrlAt(r, c).m_color[2]));
+				if (Tokeniser_nextTokenMatches(tokeniser, ")"))
+					continue;
+				RETURN_FALSE_IF_FAIL(Tokeniser_getFloat(tokeniser, patch.ctrlAt(r, c).m_color[3]));
+
+				RETURN_FALSE_IF_FAIL(Tokeniser_parseToken(tokeniser, ")"));
+			}
+			RETURN_FALSE_IF_FAIL(Tokeniser_parseToken(tokeniser, ")"));
+		}
+	}
+	tokeniser.nextLine();
+	RETURN_FALSE_IF_FAIL(Tokeniser_parseToken(tokeniser, ")"));
+	return true;
+}
+
 inline bool Patch_importFooter( Patch& patch, Tokeniser& tokeniser ){
 	patch.controlPointsChanged();
 
@@ -1144,24 +1198,62 @@ public:
 	PatchDoom3TokenImporter( Patch& patch ) : m_patch( patch ){
 	}
 	bool importTokens( Tokeniser& tokeniser ){
+	RETURN_FALSE_IF_FAIL( Patch_importHeader( m_patch, tokeniser ) );
+	RETURN_FALSE_IF_FAIL( PatchDoom3_importShader( m_patch, tokeniser ) );
+	RETURN_FALSE_IF_FAIL( Patch_importParams( m_patch, tokeniser ) );
+	RETURN_FALSE_IF_FAIL( Patch_importMatrix( m_patch, tokeniser ) );
+	RETURN_FALSE_IF_FAIL( Patch_importFooter( m_patch, tokeniser ) );
+
+		return true;
+	}
+};
+
+class PatchWSTokenImporter : public MapImporter
+{
+	Patch& m_patch;
+public:
+	PatchWSTokenImporter( Patch& patch) : m_patch( patch ){}
+	bool importTokens( Tokeniser& tokeniser)
+	{
 		RETURN_FALSE_IF_FAIL( Patch_importHeader( m_patch, tokeniser ) );
+
 		RETURN_FALSE_IF_FAIL( PatchDoom3_importShader( m_patch, tokeniser ) );
 		RETURN_FALSE_IF_FAIL( Patch_importParams( m_patch, tokeniser ) );
-		RETURN_FALSE_IF_FAIL( Patch_importMatrix( m_patch, tokeniser ) );
+		RETURN_FALSE_IF_FAIL( PatchWS_importMatrix( m_patch, tokeniser ) );
 		RETURN_FALSE_IF_FAIL( Patch_importFooter( m_patch, tokeniser ) );
 
 		return true;
 	}
 };
 
-inline void Patch_exportHeader( const Patch& patch, TokenWriter& writer ){
-	writer.writeToken( "{" );
+
+inline void Patch_exportHeader(const Patch &patch, TokenWriter &writer)
+{
+	writer.writeToken("{");
 	writer.nextLine();
-	writer.writeToken( patch.m_patchDef3 ? "patchDef3" : "patchDef2" );
+
+	//if it has colours, use our postfix on the patchdef type (to prevent incompatible tools giving weird results - our parser doesn't really care for now...)
+	bool hascolours = false;
+	for (std::size_t c = 0; c < patch.getWidth() && !hascolours; c++) {
+		for (std::size_t r = 0; r < patch.getHeight(); r++) {
+			auto v = patch.ctrlAt(r, c);
+			if (v.m_color[0] != 1 || v.m_color[1] != 1 || v.m_color[2] != 1 || v.m_color[3] != 1)
+			{
+				hascolours = true;
+				break;
+			}
+		}
+	}
+	if (hascolours) {
+		writer.writeToken(patch.m_patchDef3 ? "patchDef3WS" : "patchDef2WS");
+	} else {
+		writer.writeToken(patch.m_patchDef3 ? "patchDef3" : "patchDef2");
+	}
 	writer.nextLine();
-	writer.writeToken( "{" );
+	writer.writeToken("{");
 	writer.nextLine();
 }
+
 
 inline void Patch_exportShader( const Patch& patch, TokenWriter& writer ){
 	// write shader name
@@ -1258,6 +1350,20 @@ public:
 	PatchDoom3TokenExporter( Patch& patch ) : m_patch( patch ){
 	}
 	void exportTokens( TokenWriter& writer ) const {
+		Patch_exportHeader( m_patch, writer );
+		PatchDoom3_exportShader( m_patch, writer );
+		Patch_exportParams( m_patch, writer );
+		Patch_exportMatrix( m_patch, writer );
+		Patch_exportFooter( m_patch, writer );
+	}
+};
+
+class PatchWSTokenExporter : public MapExporter
+{
+	const Patch& m_patch;
+public:
+	PatchWSTokenExporter( Patch& patch ) : m_patch( patch ){}
+	void exportTokens( TokenWriter& writer ) const{
 		Patch_exportHeader( m_patch, writer );
 		PatchDoom3_exportShader( m_patch, writer );
 		Patch_exportParams( m_patch, writer );
@@ -1808,6 +1914,7 @@ public:
 
 typedef PatchNode<PatchTokenImporter, PatchTokenExporter> PatchNodeQuake3;
 typedef PatchNode<PatchDoom3TokenImporter, PatchDoom3TokenExporter> PatchNodeDoom3;
+typedef PatchNode<PatchWSTokenImporter, PatchWSTokenExporter> PatchNodeWS;
 
 inline Patch* Node_getPatch( scene::Node& node ){
 	return NodeTypeCast<Patch>::cast( node );

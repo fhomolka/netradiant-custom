@@ -268,6 +268,15 @@ inline bool Tokeniser_getSize( Tokeniser& tokeniser, std::size_t& i ){
 	return false;
 }
 
+inline bool Tokeniser_nextTokenMatches( Tokeniser& tokeniser, const char* expected ){
+	const char* token = tokeniser.getToken();
+	if ( token != 0 && string_equal( token, expected ) ) {
+		return true;
+	}
+	tokeniser.ungetToken();
+	return false;
+}
+
 inline bool Tokeniser_parseToken( Tokeniser& tokeniser, const char* expected ){
 	const char* token = tokeniser.getToken();
 	if ( token != 0 && string_equal( token, expected ) ) {
