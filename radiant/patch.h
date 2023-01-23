@@ -368,6 +368,7 @@ class Patch :
 		    const PatchControlArray& ctrl,
 		    const char* shader,
 		    bool patchDef3,
+		    bool patchDefWS,
 		    std::size_t subdivisions_x,
 		    std::size_t subdivisions_y
 		) :
@@ -376,6 +377,7 @@ class Patch :
 			m_shader( shader ),
 			m_ctrl( ctrl ),
 			m_patchDef3( patchDef3 ),
+			m_patchDefWS( patchDefWS ),
 			m_subdivisions_x( subdivisions_x ),
 			m_subdivisions_y( subdivisions_y ){
 		}
@@ -941,7 +943,7 @@ public:
 	}
 
 	UndoMemento* exportState() const {
-		return new SavedState( m_width, m_height, m_ctrl, m_shader.c_str(), m_patchDef3, m_subdivisions_x, m_subdivisions_y );
+		return new SavedState( m_width, m_height, m_ctrl, m_shader.c_str(), m_patchDef3, m_patchDefWS,m_subdivisions_x, m_subdivisions_y );
 	}
 	void importState( const UndoMemento* state ){
 		undoSave();
@@ -1871,12 +1873,13 @@ public:
 		return m_patch;
 	}
 
-	PatchNode( bool patchDef3 = false ) :
+	PatchNode( bool patchDef3 = false, bool patchDefWS = false ) :
 		m_node( this, this, StaticTypeCasts::instance().get() ),
 		m_patch( m_node, InstanceSetEvaluateTransform<PatchInstance>::Caller( m_instances ), InstanceSet::BoundsChangedCaller( m_instances ) ),
 		m_importMap( m_patch ),
 		m_exportMap( m_patch ){
 		m_patch.m_patchDef3 = patchDef3;
+		m_patch.m_patchDefWS = patchDefWS;
 	}
 	PatchNode( const PatchNode& other ) :
 		scene::Node::Symbiot( other ),
