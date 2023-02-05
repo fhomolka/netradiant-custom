@@ -1117,6 +1117,47 @@ inline bool Patch_importMatrix( Patch& patch, Tokeniser& tokeniser ){
 	return true;
 }
 
+inline bool PatchWS_importParams( Patch& patch, Tokeniser& tokeniser ){
+	tokeniser.nextLine();
+	RETURN_FALSE_IF_FAIL( Tokeniser_parseToken( tokeniser, "(" ) );
+
+	// parse matrix dimensions
+	{
+		std::size_t c, r;
+		RETURN_FALSE_IF_FAIL( Tokeniser_getSize( tokeniser, c ) );
+		RETURN_FALSE_IF_FAIL( Tokeniser_getSize( tokeniser, r ) );
+
+		patch.setDims( c, r );
+	}
+
+	/* here we are reading the contents/flags/value fields, but depending
+	   on if this is a patchDef3 or not, we might have two more tokens.
+	   if we do have these extra tokens, that means that f1 and f2 are
+	   representing our patch its subdivision fields. */
+
+	/* we don't know how much we're reading quite yet */
+	int f1, f2, f3, f4, f5;
+	RETURN_FALSE_IF_FAIL( Tokeniser_getInteger( tokeniser, f1 ) );
+	RETURN_FALSE_IF_FAIL( Tokeniser_getInteger( tokeniser, f2 ) );
+	RETURN_FALSE_IF_FAIL( Tokeniser_getInteger( tokeniser, f3 ) );
+
+	/* if that's the end, leave it at that */
+ 	if (Tokeniser_nextTokenMatches(tokeniser, ")")) {
+		return true;
+	}
+
+	/* we need to read two more bits of data... */
+	RETURN_FALSE_IF_FAIL( Tokeniser_getInteger( tokeniser, f4 ) );
+	RETURN_FALSE_IF_FAIL( Tokeniser_getInteger( tokeniser, f5 ) );
+
+	/* and then, that should be the end of it */
+	RETURN_FALSE_IF_FAIL( Tokeniser_parseToken( tokeniser, ")" ) );
+
+	patch.m_subdivisions_x = f1;
+	patch.m_subdivisions_y = f2;
+	return true;
+}
+
 inline bool PatchWS_importMatrix( Patch& patch, Tokeniser& tokeniser ){
 	// parse matrix
 	tokeniser.nextLine();
@@ -1147,6 +1188,7 @@ inline bool PatchWS_importMatrix( Patch& patch, Tokeniser& tokeniser ){
 				RETURN_FALSE_IF_FAIL(Tokeniser_getFloat(tokeniser, patch.ctrlAt(r, c).m_color[0]));
 				if (Tokeniser_nextTokenMatches(tokeniser, ")"))
 					continue;
+
 				RETURN_FALSE_IF_FAIL(Tokeniser_getFloat(tokeniser, patch.ctrlAt(r, c).m_color[1]));
 				if (Tokeniser_nextTokenMatches(tokeniser, ")"))
 					continue;
@@ -1220,7 +1262,7 @@ public:
 		RETURN_FALSE_IF_FAIL( Patch_importHeader( m_patch, tokeniser ) );
 
 		RETURN_FALSE_IF_FAIL( PatchDoom3_importShader( m_patch, tokeniser ) );
-		RETURN_FALSE_IF_FAIL( Patch_importParams( m_patch, tokeniser ) );
+		RETURN_FALSE_IF_FAIL( PatchWS_importParams( m_patch, tokeniser ) );
 		RETURN_FALSE_IF_FAIL( PatchWS_importMatrix( m_patch, tokeniser ) );
 		RETURN_FALSE_IF_FAIL( Patch_importFooter( m_patch, tokeniser ) );
 
