@@ -191,6 +191,7 @@ pack WarforkPack       GPL         git    https://gitlab.com/netradiant/gamepack
 #pack WarsowPack       GPL         svn    https://svn.bountysource.com/wswpack/trunk/netradiant/games/WarsowPack/
 #pack WarsowPack       GPL         zip1   http://ingar.intranifty.net/files/netradiant/gamepacks/WarsowPack.zip
 pack WarsowPack        GPL         git    https://github.com/Warsow/NetRadiantPack.git
+pack WastesPack        GPL         git    https://github.com/VeraVisions/wastes-mapeditor-support.git
 pack WolfPack          proprietary svn    svn://svn.icculus.org/gtkradiant-gamepacks/WolfPack/branches/1.5/
 pack WoPPack           proprietary git    https://github.com/PadWorld-Entertainment/wop-mapeditor-support.git
 pack XonoticPack       GPL         git    https://gitlab.com/xonotic/netradiant-xonoticpack.git
