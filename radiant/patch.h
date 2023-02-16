@@ -1261,7 +1261,7 @@ public:
 	{
 		RETURN_FALSE_IF_FAIL( Patch_importHeader( m_patch, tokeniser ) );
 
-		RETURN_FALSE_IF_FAIL( PatchDoom3_importShader( m_patch, tokeniser ) );
+		RETURN_FALSE_IF_FAIL( Patch_importShader( m_patch, tokeniser ) );
 		RETURN_FALSE_IF_FAIL( PatchWS_importParams( m_patch, tokeniser ) );
 		RETURN_FALSE_IF_FAIL( PatchWS_importMatrix( m_patch, tokeniser ) );
 		RETURN_FALSE_IF_FAIL( Patch_importFooter( m_patch, tokeniser ) );

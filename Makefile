@@ -412,6 +412,7 @@ binaries-radiant-modules: \
 	$(INSTALLDIR)/modules/mapxml.$(DLL) \
 	$(INSTALLDIR)/modules/assmodel.$(DLL) \
 	$(INSTALLDIR)/modules/shaders.$(DLL) \
+	$(INSTALLDIR)/modules/matsys.$(DLL) \
 	$(INSTALLDIR)/modules/vfspk3.$(DLL) \
 
 .PHONY: binaries-radiant-plugins
@@ -1070,6 +1071,13 @@ $(INSTALLDIR)/modules/shaders.$(DLL): CPPFLAGS_EXTRA := $(CPPFLAGS_GLIB) -Ilibs 
 $(INSTALLDIR)/modules/shaders.$(DLL): \
 	plugins/shaders/plugin.o \
 	plugins/shaders/shaders.o \
+	libcommandlib.$(A) \
+
+$(INSTALLDIR)/modules/matsys.$(DLL): LIBS_EXTRA := $(LIBS_GLIB)
+$(INSTALLDIR)/modules/matsys.$(DLL): CPPFLAGS_EXTRA := $(CPPFLAGS_GLIB) -Ilibs -Iinclude
+$(INSTALLDIR)/modules/matsys.$(DLL): \
+	plugins/matsys/plugin.o \
+	plugins/matsys/shaders.o \
 	libcommandlib.$(A) \
 
 $(INSTALLDIR)/modules/vfspk3.$(DLL): LIBS_EXTRA := $(LIBS_GLIB)
