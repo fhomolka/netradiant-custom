@@ -1417,7 +1417,7 @@ public:
 	PatchWSTokenExporter( Patch& patch ) : m_patch( patch ){}
 	void exportTokens( TokenWriter& writer ) const{
 		PatchWS_exportHeader( m_patch, writer );
-		PatchDoom3_exportShader( m_patch, writer );
+		Patch_exportShader( m_patch, writer );
 		Patch_exportParams( m_patch, writer );
 		Patch_exportMatrix( m_patch, writer );
 		Patch_exportFooter( m_patch, writer );
