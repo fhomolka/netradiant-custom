@@ -38,7 +38,7 @@
 #include <QSplitter>
 #include <QTreeWidget>
 #include <QHeaderView>
-#include <QTextEdit>
+#include <QPlainTextEdit>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
@@ -51,7 +51,7 @@
 #include <QKeyEvent>
 #include <QApplication>
 #include <QButtonGroup>
-#include <QComboBox>
+#include "gtkutil/combobox.h"
 
 #include "os/path.h"
 #include "eclasslib.h"
@@ -651,7 +651,7 @@ class ListAttribute final : public EntityAttribute
 public:
 	ListAttribute( const char* key, const ListAttributeType& type ) :
 		m_key( key ),
-		m_combo( new QComboBox ),
+		m_combo( new ComboBox ),
 		m_type( type ){
 		for ( const auto&[ name, value ] : type )
 		{
@@ -691,7 +691,7 @@ namespace
 bool g_entityInspector_windowConstructed = false;
 
 QTreeWidget* g_entityClassList;
-QTextEdit* g_entityClassComment;
+QPlainTextEdit* g_entityClassComment;
 
 QCheckBox* g_entitySpawnflagsCheck[MAX_FLAGS];
 
@@ -1144,6 +1144,13 @@ protected:
 				event->accept();
 			}
 		}
+		// clear focus widget while showing to keep global shortcuts working
+		else if( event->type() == QEvent::Show ) {
+			QTimer::singleShot( 0, [obj](){
+				if( static_cast<QWidget*>( obj )->focusWidget() != nullptr )
+					static_cast<QWidget*>( obj )->focusWidget()->clearFocus();
+			} );
+		}
 		return QObject::eventFilter( obj, event ); // standard event processing
 	}
 }
@@ -1185,10 +1192,9 @@ QWidget* EntityInspector_constructWindow( QWidget* toplevel ){
 		splitter->addWidget( tree );
 	}
 	{
-		auto text = g_entityClassComment = new QTextEdit;
+		auto text = g_entityClassComment = new QPlainTextEdit;
 		text->setReadOnly( true );
 		text->setUndoRedoEnabled( false );
-		text->setAcceptRichText( false );
 
 		splitter->addWidget( text );
 	}
