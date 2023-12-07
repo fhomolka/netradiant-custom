@@ -52,6 +52,7 @@
 #include <QDialogButtonBox>
 #include <QPushButton>
 #include <QGroupBox>
+#include <QApplication>
 #include "gtkutil/spinbox.h"
 #include "gtkutil/guisettings.h"
 #include <QPlainTextEdit>
@@ -371,6 +372,10 @@ void DoAbout(){
 					QObject::connect( button, &QPushButton::clicked, [](){ OpenURL( StringOutputStream( 256 )( AppPath_get(), "changelog.txt" ) ); } );
 					button->setEnabled( false );
 				}
+				{
+					auto button = buttons->addButton( "About Qt", QDialogButtonBox::ButtonRole::NoRole );
+					QObject::connect( button, &QPushButton::clicked, &QApplication::aboutQt );
+				}
 			}
 		}
 		{
@@ -448,6 +453,148 @@ void DoShaderInfoDlg( const char* name, const char* filename, const char* title 
 	text << "<b>" << filename << "</b>";
 
 	qt_MessageBox( MainFrame_getWindow(), text.c_str(), title );
+}
+
+// =============================================================================
+// Install dev files dialog
+#include <QListWidget>
+#include <QMessageBox>
+#include <QScrollBar>
+#include <QTextStream>
+
+void DoInstallDevFilesDlg( const char *enginePath ){
+	std::vector<std::filesystem::path> files; // relative source files paths
+	const auto sourceBase = std::filesystem::path( g_pGameDescription->mGameToolsPath.c_str() ) / "install/";
+	const auto targetBase = std::filesystem::path( enginePath ) / basegame_get();
+	QString description;
+	{
+		std::error_code err;
+		std::filesystem::recursive_directory_iterator dirIter( sourceBase, err );
+		if( err ){
+			globalErrorStream() << err.message().c_str() << ' ' << sourceBase.string().c_str() << '\n';
+			return;
+		}
+		for( const auto& dirEntry : dirIter ) {
+			if( err ){
+				globalErrorStream() << err.message().c_str() << '\n';
+				break;
+			}
+			if( dirEntry.is_regular_file( err ) && !err ){
+				if( dirIter.depth() == 0 && dirEntry.path().filename() == ".description" ){
+					if( QFile f( QString::fromStdString( dirEntry.path().string() ) ); f.open( QIODevice::ReadOnly | QIODevice::Text ) )
+						description = QTextStream( &f ).readAll();
+				}
+				else{
+					files.push_back( std::filesystem::relative( dirEntry.path(), sourceBase, err ) );
+				}
+			}
+		}
+	}
+	if( !files.empty() ){
+		QDialog dialog( nullptr, Qt::Window );
+		dialog.setWindowTitle( "Install Map Developer's Files" );
+		{
+			auto *box = new QVBoxLayout( &dialog );
+			{
+				auto *label = new QLabel( "Would you like to install following files recommended for fluent map development\nto " + QString::fromStdString( targetBase.string() ) + "?" );
+				label->setAlignment( Qt::AlignmentFlag::AlignHCenter );
+				box->addWidget( label );
+			}
+			QListWidget *listWidget;
+			{
+				listWidget = new QListWidget;
+				listWidget->setSelectionMode( QAbstractItemView::SelectionMode::NoSelection );
+				box->addWidget( listWidget, 0 );
+				for( const auto& file : files ){
+					listWidget->addItem( QString::fromStdString( file.string() ) );
+				}
+			}
+			if( !description.isEmpty() ){
+				box->addWidget( new QLabel( ".description" ) );
+				auto *text = new QPlainTextEdit( description );
+				text->setSizePolicy( QSizePolicy::Policy::MinimumExpanding, QSizePolicy::Policy::MinimumExpanding );
+				text->setLineWrapMode( QPlainTextEdit::LineWrapMode::NoWrap );
+				text->setReadOnly( true );
+				// set minimal size to fit text to avoid the need to resize window/scroll
+				const auto rect = text->fontMetrics().boundingRect( QRect(), 0, description );
+				text->setMinimumSize( rect.width() + text->contentsMargins().left() + text->contentsMargins().right()
+				                      + text->document()->documentMargin() * 2 + text->verticalScrollBar()->sizeHint().width(),
+				                      rect.height() + text->contentsMargins().top() + text->contentsMargins().bottom()
+				                      + text->document()->documentMargin() * 2 + text->horizontalScrollBar()->sizeHint().height() );
+
+				box->addWidget( text, 0 );
+			}
+			const auto doCopy = [&](){
+				QMessageBox::StandardButton overwrite = QMessageBox::StandardButton::Yes;
+				size_t copiedN = 0;
+				for( size_t i = 0; i < files.size(); ++i ){
+					const auto source = sourceBase / files[i];
+					const auto target = targetBase / files[i];
+					std::error_code err;
+					if( ( std::filesystem::exists( target, err ) || err ) && overwrite != QMessageBox::StandardButton::YesToAll ){
+						if( overwrite == QMessageBox::StandardButton::NoToAll ) continue;
+						overwrite = (QMessageBox::StandardButton)QMessageBox( QMessageBox::Icon::Question, "File exists",
+							QString( "File \"" ) + QString::fromStdString( target.string() ) + "\" exists.\nOverwrite it?",
+							QMessageBox::StandardButton::Yes |
+							QMessageBox::StandardButton::YesToAll |
+							QMessageBox::StandardButton::No |
+							QMessageBox::StandardButton::NoToAll |
+							QMessageBox::StandardButton::Abort, &dialog ).exec();
+						if( overwrite == QMessageBox::StandardButton::Abort ) break;
+						if( overwrite == QMessageBox::StandardButton::NoToAll || overwrite == QMessageBox::StandardButton::No ) continue;
+					}
+
+					const auto copy_file = [&](){
+						if( std::filesystem::exists( target, err ) ){
+							if( !std::filesystem::remove( target, err ) ){
+								return false;
+							}
+						}
+						else if( err ){
+							return false;
+						}
+						std::filesystem::create_directories( target.parent_path(), err );
+						if( err )
+							return false;
+						// std::filesystem::copy_options::overwrite_existing is broken in libstdc++ on windows, thus using std::filesystem::remove
+						return std::filesystem::copy_file( source, target, std::filesystem::copy_options::none, err );
+					};
+retry:
+					if( !copy_file() ){
+						const auto ret = (QMessageBox::StandardButton)QMessageBox( QMessageBox::Icon::Question, "Fail",
+							"Failed to write \"" + QString::fromStdString( target.string() ) + "\"\n" + err.message().c_str(),
+							QMessageBox::StandardButton::Retry |
+							QMessageBox::StandardButton::Ignore |
+							QMessageBox::StandardButton::Abort, &dialog ).exec();
+						if( ret == QMessageBox::StandardButton::Retry ) goto retry;
+						if( ret == QMessageBox::StandardButton::Ignore ) continue;
+						if( ret == QMessageBox::StandardButton::Abort ) break;
+					}
+					auto *item = listWidget->item( i );
+					item->setCheckState( Qt::CheckState::Checked );
+					listWidget->scrollToItem( item );
+					QCoreApplication::processEvents( QEventLoop::ProcessEventsFlag::ExcludeUserInputEvents );
+					++copiedN;
+				}
+
+				if( copiedN == files.size() )
+					qt_MessageBox( &dialog, "All files have been copied.", "Great Success!" );
+				else if( copiedN != 0 )
+					qt_MessageBox( &dialog, StringOutputStream( 64 )( copiedN, '/', files.size(), " files have been copied." ), "Moderate Success!" );
+				else
+					qt_MessageBox( &dialog, "No files have been copied.", "Boo!" );
+
+				dialog.accept();
+			};
+			{
+				auto *buttons = new QDialogButtonBox( QDialogButtonBox::StandardButton::Ok | QDialogButtonBox::StandardButton::Cancel );
+				box->addWidget( buttons );
+				QObject::connect( buttons, &QDialogButtonBox::accepted, doCopy );
+				QObject::connect( buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject );
+			}
+		}
+		dialog.exec();
+	}
 }
 
 
@@ -1425,6 +1572,7 @@ class QLineEdit_search : public QLineEdit
 	QPlainTextEdit& m_textEdit;
 public:
 	QLineEdit_search( QPlainTextEdit& textEdit ) : m_textEdit( textEdit ){
+		setPlaceholderText( QString::fromUtf8( u8"🔍" ) );
 		QObject::connect( this, &QLineEdit::textEdited, [this]( const QString &text ){
 			// when typing, we do not want jumping to next occurence on each letter input, set cursor to selection start
 			if( auto cursor = m_textEdit.textCursor(); cursor.hasSelection() ){
@@ -2060,7 +2208,7 @@ private:
 	}
 };
 
-class TextEditor
+class TextEditor : public QObject
 {
 	QWidget *m_window = 0;
 	QPlainTextEdit *m_textView; // slave, text widget from the gtk editor
@@ -2070,6 +2218,7 @@ class TextEditor
 	void construct(){
 		m_window = new QWidget( MainFrame_getWindow(), Qt::Dialog | Qt::WindowMinimizeButtonHint | Qt::WindowMaximizeButtonHint | Qt::WindowCloseButtonHint );
 		g_guiSettings.addWindow( m_window, "ShaderEditor/geometry" );
+		m_window->installEventFilter( this );
 
 		auto *vbox = new QVBoxLayout( m_window );
 		vbox->setContentsMargins( 0, 0, 0, 0 );
@@ -2109,10 +2258,10 @@ class TextEditor
 							"<meta http-equiv=Refresh content=\"0; url=" << link << "\"><body></body>"
 						"</html>";
 					file.close();
-					QDesktopServices::openUrl( filename );
+					QDesktopServices::openUrl( QUrl::fromUserInput( filename ) );
 				}
 #else
-				QDesktopServices::openUrl( link );
+				QDesktopServices::openUrl( QUrl::fromUserInput( link ) );
 #endif
 			} );
 
@@ -2164,11 +2313,31 @@ class TextEditor
 
 		m_textView->document()->setModified( false );
 	}
+	// returns true, if document modifications got saved or user decided to discard them
+	bool ensure_saved(){
+		if( m_textView->document()->isModified() ) {
+			const auto ret = qt_MessageBox( m_window, "Document has been modified.\nSave it?", "Save", EMessageBoxType::Question,
+				EMessageBoxReturn::eIDYES | EMessageBoxReturn::eIDNO | EMessageBoxReturn::eIDCANCEL );
+			if( ret == EMessageBoxReturn::eIDYES ){
+				editor_save();
+			}
+			if( ret == EMessageBoxReturn::eIDNO ){ // discard changes
+				m_textView->clear(); // unset isModified flag this way to avoid messagebox on next opening
+			}
+			else if( ret == EMessageBoxReturn::eIDCANCEL ){
+				return false;
+			}
+		}
+		return true;
+	}
 public:
 	void DoGtkTextEditor( const char* text, const char* shaderName, const char* filename, const bool editable ){
 		if ( !m_window ) {
 			construct(); // build it the first time we need it
 		}
+
+		if( !ensure_saved() )
+			return;
 
 		m_filename = filename;
 		m_textView->setReadOnly( !editable );
@@ -2193,6 +2362,16 @@ public:
 					break;
 				}
 		}
+	}
+protected:
+	bool eventFilter( QObject *obj, QEvent *event ) override {
+		if( event->type() == QEvent::Close ) {
+			if( !ensure_saved() ){ // keep editor opened
+				event->ignore();
+				return true;
+			}
+		}
+		return QObject::eventFilter( obj, event ); // standard event processing
 	}
 };
 
